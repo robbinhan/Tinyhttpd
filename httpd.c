@@ -26,6 +26,7 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <logger/log.h>
 
 #define ISspace(x) isspace((int)(x))
 
@@ -54,6 +55,7 @@ void unimplemented(int);
 /**********************************************************************/
 void accept_request(void *arg)
 {
+    log_debug("accept_request start");
     int client = (intptr_t)arg;
     char buf[1024];
     size_t numchars;
@@ -66,7 +68,9 @@ void accept_request(void *arg)
                        * program */
     char *query_string = NULL;
 
+// 读取http的数据到buffer
     numchars = get_line(client, buf, sizeof(buf));
+    // 读取到HTTP method
     i = 0; j = 0;
     while (!ISspace(buf[i]) && (i < sizeof(method) - 1))
     {
@@ -75,6 +79,10 @@ void accept_request(void *arg)
     }
     j=i;
     method[i] = '\0';
+
+    // buf: GET / HTTP/1.1
+    log_debug("buf: %s", buf);
+    log_debug("method: %s sizeof: %d", method, sizeof(method));
 
     if (strcasecmp(method, "GET") && strcasecmp(method, "POST"))
     {
@@ -85,9 +93,12 @@ void accept_request(void *arg)
     if (strcasecmp(method, "POST") == 0)
         cgi = 1;
 
+    // 跳过buf中的空格
     i = 0;
     while (ISspace(buf[j]) && (j < numchars))
         j++;
+
+    //读取访问的路径
     while (!ISspace(buf[j]) && (i < sizeof(url) - 1) && (j < numchars))
     {
         url[i] = buf[j];
@@ -95,9 +106,12 @@ void accept_request(void *arg)
     }
     url[i] = '\0';
 
+    log_debug("url: %s  sizeof: %d", url, sizeof(url));
+
     if (strcasecmp(method, "GET") == 0)
     {
         query_string = url;
+        // 读取url后的参数
         while ((*query_string != '?') && (*query_string != '\0'))
             query_string++;
         if (*query_string == '?')
@@ -106,9 +120,12 @@ void accept_request(void *arg)
             *query_string = '\0';
             query_string++;
         }
+
+        log_debug("query_string: %s  sizeof: %d", query_string, sizeof(query_string));
     }
 
     sprintf(path, "htdocs%s", url);
+    // 最后一位如果是/，默认访问根目录的index.html
     if (path[strlen(path) - 1] == '/')
         strcat(path, "index.html");
     if (stat(path, &st) == -1) {
@@ -404,6 +421,7 @@ void serve_file(int client, const char *filename)
     char buf[1024];
 
     buf[0] = 'A'; buf[1] = '\0';
+    // 不明白
     while ((numchars > 0) && strcmp("\n", buf))  /* read & discard headers */
         numchars = get_line(client, buf, sizeof(buf));
 
@@ -495,8 +513,14 @@ int main(void)
     socklen_t  client_name_len = sizeof(client_name);
     pthread_t newthread;
 
+    FILE *fp = NULL;
+    fp = fopen("out.log", "w+");
+    log_set_fp(fp);
+
     server_sock = startup(&port);
     printf("httpd running on port %d\n", port);
+
+    log_info("httpd running on port %d\n", port);
 
     while (1)
     {
@@ -511,6 +535,7 @@ int main(void)
     }
 
     close(server_sock);
+    fclose(fp);
 
     return(0);
 }

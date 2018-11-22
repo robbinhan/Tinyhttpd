@@ -1,0 +1,6 @@
+httpd
+client
+out.log
+*.dSYM
+logger/*.gch
+.vscode
